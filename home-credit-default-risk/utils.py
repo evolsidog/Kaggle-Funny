@@ -1,4 +1,4 @@
-from sklearn import metrics
+from sklearn.metrics import roc_curve, auc, classification_report
 
 
 def split_num_str_data(df):
@@ -13,5 +13,10 @@ def drop_nan_by_thresh(df, thresh):
 
 
 def estimate_auc(y_test, y_pred):
-    fpr, tpr, thresholds = metrics.roc_curve(y_true=y_test, y_score=y_pred, pos_label=1)
-    print("AUC ", metrics.auc(x=fpr, y=tpr))
+    fpr, tpr, thresholds = roc_curve(y_true=y_test, y_score=y_pred, pos_label=1)
+    print("AUC ", auc(x=fpr, y=tpr))
+
+
+def report_classification(y_test, predicted):
+    report = classification_report(y_test, predicted)
+    print("Classification report: ", report)
