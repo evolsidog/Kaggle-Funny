@@ -2,6 +2,7 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification
 from sklearn.model_selection import train_test_split, GridSearchCV
 from imblearn.over_sampling import SMOTE, ADASYN
+from xgboost import XGBClassifier
 import pandas as pd
 import random
 import os
@@ -11,7 +12,7 @@ ini_time = time.time()
 
 SEED = 1234
 TEST_SIZE = 0.2
-NJOBS = 4
+NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
 USER = "vic"
@@ -23,8 +24,9 @@ random.seed(SEED)
 # Probar best params y entrenar con columnas relevantes -> hecho, al no coger todas las columnas mejora un poco pero al tener el balanceo anterior empeora
 # Train with 80 - 20 -> Hecho
 # Check features importance con el oversampling original de Nuno y ver si mejora un poco al quitarle features innecesarias -> Hecho
-# isolated forest
-# Probar xgboost
+# isolated forest -> no tiene predict_proba y devuelve 1 y -1. Mucho trabajo adaptarlo.
+# Probar xgboost -> tampoco mejora mucho y el predict_proba hay que cambiar los argumentos.
+# Revisar las metricas tras corregir lo del resampleo del test, en kaggle bien pero en local de pena.
 
 base_path = "/home/" + USER + "/.kaggle/competitions/home-credit-default-risk"
 print("Loading files")
@@ -62,12 +64,14 @@ print("Positive class data percentage:", pos_weight_after)
 # y_weight = int(round(100 / pos_weight_after))
 # print("Weight for unbalancing class:", y_weight)
 
-X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X, y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
+                                                    random_state=SEED, stratify=y)
+
+X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
 print("Train Size before resampling", X_resampled.shape[0])
 print("Positive class samples percentage after resampling", sum(y_resampled) / len(y_resampled))
 
-X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=TEST_SIZE,
-                                                    random_state=SEED, stratify=y_resampled)
+
 print("Train Size after resampling", X_train.shape[0])
 
 clf = RandomForestClassifier(n_jobs=NJOBS,
@@ -123,16 +127,14 @@ params = {k: cv_rfc.best_estimator_.get_params()[k] for k in param_grid}
 
 clf_opt = RandomForestClassifier(n_jobs=NJOBS, random_state=SEED, bootstrap=False, max_depth=25, min_samples_leaf=3,
                                  min_samples_split=5, n_estimators=300)
+# clf_opt = XGBClassifier(random_state=SEED, n_estimators=300)
+
 print("Fitting model ... ")
 clf_opt.fit(X_train, y_train)
 
 print("Model fitted. Predicting ...")
 y_pred_test = clf_opt.predict(X_test)
 y_pred_train = clf_opt.predict(X_train)
-
-'''
-clf.fit(X=X_train, y=y_train)
-'''
 
 estimate_auc(y_pred=y_pred_train, y_test=y_train)
 estimate_auc(y_pred=y_pred_test, y_test=y_test)
