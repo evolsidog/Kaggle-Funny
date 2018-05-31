@@ -37,7 +37,7 @@ def preprocess_test_set(df_test, df_train):
     # Keep the same columns
     df_test = df_test.loc[:, df_test.columns.isin(df_train.columns)]
 
-    df_test = DataFrameImputer().fit_transform(X=df_test, fill_type="mean_mode")
+    df_test = DataFrameImputer(fill_type="mean_mode").fit_transform(X=df_test)
 
     df_test_num, df_test_str = split_num_str_data(df_test)
 
@@ -87,6 +87,29 @@ def report_classification(y_test, predicted):
 
 
 def encode_categorical_variables(df):
+    '''
+
+
+    :param df: Codifies each column of the dataframe with Label Encoder algorithm.
+
+     LabelEncoder acts in two steps:
+
+     1 - Fit:
+
+        'a' -> 1
+        'b' -> 2
+        'c' -> 3
+        'd' -> 4
+
+     2 - Transform:
+
+        ['a', 'a', 'b', 'c', 'a', 'd'] --> [1, 1, 2, 3, 1, 4]
+
+
+    :return: The encoded Dataframe
+    '''
+
+
     le = preprocessing.LabelEncoder()
     for col in df.columns:
         le.fit(df[col])
@@ -112,7 +135,7 @@ def deal_with_nan(df, action=None):
         print("dropping row which contains nan's ", df.shape[0])
 
     elif action == "impute":
-        df = DataFrameImputer().fit_transform(X=df, fill_type="mean_mode")
+        df = DataFrameImputer(fill_type="mean_mode").fit_transform(X=df)
         print("imputing with mode and mean")
 
     return df
@@ -155,29 +178,31 @@ def get_best_grid_cv_model(clf, param_grid, X_train, y_train):
 
 class DataFrameImputer(TransformerMixin):
 
-    def __init__(self):
+    def __init__(self, fill_type="mean_mode"):
         '''
 
+        :param fill_type: Should be 'mean_mode' to impute numerical columns with mean and categorical columns with mode.
+        Should be 'const' if we want to impute with a constant value(usually -1)
         '''
-    def fit(self, X, fill_type="mean_mode", y=None):
+        self.fill_type = fill_type
+
+    def fit(self, X, y=None):
         '''
 
         :param X: Dataframe we want to impute
-        :param fill_type: Should be 'mean_mode' to impute numerical columns with mean and categorical columns with mode.
-        Should be 'const' if we want to impute with a constant value(usually -1)
         :return: Filled dataframe
         '''
 
-        if fill_type == "mean_mode":
+        if self.fill_type == "mean_mode":
             self.fill = pd.Series([X[c].value_counts().index[0]
                 if X[c].dtype == np.dtype('O') else X[c].mean() for c in X],
                 index=X.columns)
 
-        elif fill_type == "const":
+        elif self.fill_type == "const":
             self.fill = pd.Series(["-1" if X[c].dtype == np.dtype('O') else -1 for c in X],
                                   index=X.columns)
 
         return self
 
-    def transform(self, X, fill_type="mean_mode", y=None):
+    def transform(self, X, y=None):
         return X.fillna(self.fill)
