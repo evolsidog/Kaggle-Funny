@@ -1,5 +1,6 @@
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification
+from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification, preprocess_test_set,\
+    deal_with_nan, encode_categorical_variables
 from sklearn.model_selection import train_test_split, GridSearchCV
 from imblearn.over_sampling import SMOTE, ADASYN
 from xgboost import XGBClassifier
@@ -8,14 +9,31 @@ import random
 import os
 import time
 
+# TODO
+# 0 - Mirar algun cruce de tablas por el sk_curr_id
+# 1 - Categoricas que son False y True pasarlas a unos y ceros
+# 2 - Categoricas que sean cadenas (One hot Encoding?)
+# 3 - Una vez mirado lo anterior, quitamos lo nulos(eliminar filas y columnas).
+# 4 - Despues imputamos(moda. media? Revisar con cuidado cuando son cadenas)
+# 5 - Usar RFC para sacar la importancia de las features.
+# 6 - Quitar las no importantes
+# 6.5 - Sacar hiperparametros
+# 7 - Usar IsolationForest
+# 8 - Investigar como obtener el vector de probabilidades(hay un método?¿?)
+# 9 - Grid Search
+# 10 - Usar XGBoost
+# 11 - Quitar variables correladas
+
+
 ini_time = time.time()
 
 SEED = 1234
 TEST_SIZE = 0.2
+THRESH = 0.8
 NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
-USER = "vic"
+USER = "ncarvalho"
 
 random.seed(SEED)
 
@@ -40,128 +58,109 @@ print("Total data :", df_app_train[TARGET].count())
 pos_weight = sum(df_app_train[TARGET]) / df_app_train[TARGET].count() * 100
 print("Positive class data percentage:", pos_weight)
 
+
+print("Columns before dropping column nan's", df_app_train.shape[1])
+
+# Removes columns
+df_app_train = drop_nan_by_thresh(df=df_app_train, thresh=THRESH, axis=1)
+
+print("Columns after dropping column nan's", df_app_train.shape[1])
+
+
+print("Rows before dealing with nan ",  df_app_train.shape[0])
+df_app_train = deal_with_nan(df=df_app_train, action="drop_rows")
+
+print("Rows after dealing with nan ", df_app_train.shape[0])
+
 # Split numeric and non numeric data
 df_app_train_num, df_app_train_str = split_num_str_data(df_app_train)
-print("Columns before dropping column nan's", df_app_train_num.shape[1])
 
-df_app_train_num = drop_nan_by_thresh(df=df_app_train_num, thresh=0.80)
-print("Columns after dropping column nan's", df_app_train_num.shape[1])
-print("Rows before dropping row nan's ", df_app_train_num.shape[0])
+print("Encoding categorical variables")
+df_app_train_str = encode_categorical_variables(df_app_train_str)
+df_app_train = pd.concat([df_app_train_num, df_app_train_str], axis=1)
 
-df_app_train_num = df_app_train_num.dropna(axis=0)
-print("Rows after dropping row nan's ", df_app_train_num.shape[0])
+del df_app_train_num, df_app_train_str
 
-# Separate predicted variables
-X = df_app_train_num.loc[:, ~ df_app_train_num.columns.isin([TARGET, SK_ID_CURR])]
-y = df_app_train_num[TARGET]
+print("Removing variables with no variance")
+# Remove columns with no variance
+df_app_train = df_app_train.loc[:,df_app_train.apply(pd.Series.nunique) != 1]
 
-print("------------- After preprocessing ---------------")
-print("Positive class data:", sum(df_app_train_num[TARGET]))
-print("Total data :", df_app_train_num[TARGET].count())
 
-pos_weight_after = sum(df_app_train_num[TARGET]) / df_app_train_num[TARGET].count() * 100
-print("Positive class data percentage:", pos_weight_after)
-# y_weight = int(round(100 / pos_weight_after))
-# print("Weight for unbalancing class:", y_weight)
+print("Separating predicter variables from target variable")
+# Separate predicter variables and target variable
+X = df_app_train.loc[:, ~ df_app_train.columns.isin([TARGET, SK_ID_CURR])]
+y = df_app_train[TARGET]
+
+
+print("Train/Test split")
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
                                                     random_state=SEED, stratify=y)
 
+
+print("Train size before resampling", X_train.shape[0])
+
+
+print("SMOTE Oversampling ..")
 X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
-print("Train Size before resampling", X_resampled.shape[0])
-print("Positive class samples percentage after resampling", sum(y_resampled) / len(y_resampled))
+pos_weight_after = sum(y_resampled) / y_resampled.size * 100
+
+print("Positive class samples percentage after resampling", pos_weight_after)
 
 
-print("Train Size after resampling", X_train.shape[0])
+print("Train Size after resampling", X_resampled.shape[0])
 
-clf = RandomForestClassifier(n_jobs=NJOBS,
-                             random_state=SEED)
+clf_opt = RandomForestClassifier(n_jobs=NJOBS,
+                                 random_state=SEED,
+                                 bootstrap=False,
+                                 max_depth=6,
+                                 min_samples_leaf=3,
+                                 min_samples_split=5,
+                                 n_estimators=30,
+                                 verbose=2)
 
-# Try 1: --> n_estimators = 150, min_samples_lead = 10, max_depth=15
-# param_grid = {
-#     "n_estimators": [50, 150],
-#     "max_depth": [5, 15],
-#     "min_samples_leaf": [10, 40]}
-
-# Try 2 --> n_estimators = 150, min_samples_lead = 10, max_depth=15
-# param_grid = {
-#     "n_estimators": [100, 150],
-#     "max_depth": [10, 15],
-#     "min_samples_leaf": [10, 20]}
-
-# Try 3 --> n_estimators = 200, min_samples_lead = 5, max_depth=20
-# param_grid = {
-#     "n_estimators": [150, 200],
-#     "max_depth": [15, 20],
-#     "min_samples_leaf": [5, 10]}
-
-# Try 4 (cv=5) --> n_estimators = 300, min_samples_lead = 3, max_depth=25, bootstrap=False, min_samples_split=5
-param_grid = {
-    "n_estimators": [200, 300],
-    "max_depth": [20, 25],
-    "min_samples_leaf": [3, 5],
-    'min_samples_split': [5, 10],
-    'bootstrap': [True, False]
-}
-
-'''
-cv_rfc = GridSearchCV(estimator=clf, param_grid=param_grid, cv=5, verbose=10)
-cv_rfc.fit(X_train, y_train)
-print("Best hiperparameters after grid search: ", cv_rfc.best_estimator_.get_params())
-# Best hiperparameters after grid search:  {'bootstrap': True, 'class_weight': None, 'criterion': 'gini', 'max_depth': 20, 'max_features': 'auto', 'max_leaf_nodes': None, 'min_impurity_decrease': 0.0, 'min_impurity_split': None, 'min_samples_leaf': 5, 'min_samples_split': 2, 'min_weight_fraction_leaf': 0.0, 'n_estimators': 200, 'n_jobs': -1, 'oob_score': False, 'random_state': 1234, 'verbose': 0, 'warm_start': False}
-
-columns = list(X.columns)
-feature_importances = cv_rfc.best_estimator_.feature_importances_
-print("Most important features are: ", sorted(zip(map(lambda x: round(x, 4), feature_importances), columns), reverse=True))
-params = {k: cv_rfc.best_estimator_.get_params()[k] for k in param_grid}
-'''
-'''
-[(0.1102, 'FLAG_DOCUMENT_3'), (0.1067, 'FLAG_PHONE'), (0.0991, 'EXT_SOURCE_3'), (0.0835, 'EXT_SOURCE_2'),
-(0.0696, 'FLAG_WORK_PHONE'), (0.06, 'REG_CITY_NOT_WORK_CITY'), (0.0514, 'CNT_FAM_MEMBERS'),
-(0.0448, 'REGION_POPULATION_RELATIVE'), (0.044, 'REGION_RATING_CLIENT'), (0.0407, 'LIVE_CITY_NOT_WORK_CITY'),
-(0.0401, 'DAYS_LAST_PHONE_CHANGE'), (0.0392, 'REGION_RATING_CLIENT_W_CITY'), (0.0378, 'AMT_REQ_CREDIT_BUREAU_MON'),
-(0.033, 'AMT_REQ_CREDIT_BUREAU_QRT'), (0.0302, 'AMT_REQ_CREDIT_BUREAU_YEAR'), (0.0256, 'CNT_CHILDREN'),
-(0.02, 'FLAG_DOCUMENT_8'), (0.0198, 'REG_CITY_NOT_LIVE_CITY'), (0.0141, 'OBS_30_CNT_SOCIAL_CIRCLE'),
-(0.0139, 'OBS_60_CNT_SOCIAL_CIRCLE'), (0.0097, 'DEF_30_CNT_SOCIAL_CIRCLE'), (0.0066, 'DEF_60_CNT_SOCIAL_CIRCLE')]
-'''
-
-clf_opt = RandomForestClassifier(n_jobs=NJOBS, random_state=SEED, bootstrap=False, max_depth=25, min_samples_leaf=3,
-                                 min_samples_split=5, n_estimators=300)
-# clf_opt = XGBClassifier(random_state=SEED, n_estimators=300)
 
 print("Fitting model ... ")
 clf_opt.fit(X_train, y_train)
 
 print("Model fitted. Predicting ...")
-y_pred_test = clf_opt.predict(X_test)
-y_pred_train = clf_opt.predict(X_train)
+y_pred_test = clf_opt.predict_proba(X_test)
+y_pred_train = clf_opt.predict_proba(X_train)
 
-estimate_auc(y_pred=y_pred_train, y_test=y_train)
-estimate_auc(y_pred=y_pred_test, y_test=y_test)
+# Get the second element of each list. The second element is the probability of label 1.
+y_pred_test = list(map(lambda x: x[1], y_pred_test)) # [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]
+y_pred_train = list(map(lambda x: x[1], y_pred_train)) # [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]
 
-report_classification(y_test=y_train, predicted=y_pred_train)
-report_classification(y_test=y_test, predicted=y_pred_test)
+
+estimate_auc(y_pred=y_pred_train, y_test=y_train, name="Train")
+estimate_auc(y_pred=y_pred_test, y_test=y_test, name="Test")
+
+report_classification(y_test=y_train, predicted=clf_opt.predict(X_train))
+report_classification(y_test=y_test, predicted=clf_opt.predict(X_test))
 
 # Predict on test data
+
+print("Prepare test data for prediction")
+
+df_app_test = preprocess_test_set(df_train=df_app_train, df_test=df_app_test)
+
 print("Predict on test data")
-# Keep the same columns
-df_app_test = df_app_test.loc[:, df_app_test.columns.isin(df_app_train_num.columns)]
 
-# Fill with mean
-df_app_test = df_app_test.apply(lambda x: x.fillna(x.mean()), axis=0)
-
-y_pred_test = clf_opt.predict_proba(df_app_test.loc[:, df_app_test.columns != SK_ID_CURR])
+# Get the ID column
 sk_id_curr = df_app_test[SK_ID_CURR]
-y_pred_test_flat = list(map(lambda x: x[1], y_pred_test))
+
+# Remove the unique ID(PK) from the test data
+df_app_test = df_app_test.loc[:, df_app_test.columns != SK_ID_CURR]
+
+# Predict
+y_pred_test = clf_opt.predict_proba(df_app_test)
+
+# This line does this:  [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]
+y_pred_test_prob = list(map(lambda x: x[1], y_pred_test))
 
 print("Generating kaggle submision")
-kaggle_submission = pd.DataFrame({TARGET: y_pred_test_flat, SK_ID_CURR: sk_id_curr})
+kaggle_submission = pd.DataFrame({TARGET: y_pred_test_prob, SK_ID_CURR: sk_id_curr})
 kaggle_submission.to_csv("submission.csv", index=False)
 
-'''
-CV_rfc.fit(X=X_resampled, y=y_resampled)
-y_pred = CV_rfc.predict(X_test)
-fpr, tpr, thresholds = metrics.roc_curve(y_true=y_test, y_score=y_pred, pos_label=1)
-print("AUC ", metrics.auc(x=fpr, y=tpr))
-'''
+
 print("Total seconds = ", time.time() - ini_time)
