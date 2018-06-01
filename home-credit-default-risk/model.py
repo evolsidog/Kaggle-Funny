@@ -1,8 +1,8 @@
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification, preprocess_test_set,\
-    deal_with_nan, encode_categorical_variables, get_most_important_features
+    deal_with_nan, encode_categorical_variables, get_most_important_features, get_important_features
 from sklearn.model_selection import train_test_split, GridSearchCV
-from imblearn.over_sampling import SMOTE, ADASYN
+from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
 from xgboost import XGBClassifier
 import pandas as pd
 import random
@@ -14,10 +14,10 @@ import time
 # 1 - Categoricas que son False y True pasarlas a unos y ceros
 # 2 - Categoricas que sean cadenas (One hot Encoding?)
 # 3 - Una vez mirado lo anterior, quitamos lo nulos(eliminar filas y columnas).
-# 4 - Despues imputamos(moda. media? Revisar con cuidado cuando son cadenas)
+# 4 - Despues imputamos(moda, media, KNN imputer? Revisar con cuidado cuando son cadenas)
 # 5 - Usar RFC para sacar la importancia de las features.
 # 6 - Quitar las no importantes
-# 6.5 - Sacar hiperparametros
+# 6.5 - Sacar hiperparametros(si puede ser en amazon)
 # 7 - Usar IsolationForest
 # 8 - Investigar como obtener el vector de probabilidades(hay un método?¿?)
 # 9 - Grid Search
@@ -94,6 +94,10 @@ y = df_app_train[TARGET]
 
 print("Train/Test split")
 
+
+
+
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
                                                     random_state=SEED, stratify=y)
 
@@ -101,8 +105,9 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
 print("Train size before resampling", X_train.shape[0])
 
 
-print("SMOTE Oversampling ..")
-X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
+print("SMOTE Oversampling ..") # 0.761
+#X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
+X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
 pos_weight_after = sum(y_resampled) / y_resampled.size * 100
 
 print("Positive class samples percentage after resampling", pos_weight_after)
@@ -119,20 +124,53 @@ clf_opt = RandomForestClassifier(n_jobs=NJOBS,
                                  min_samples_split=5,
                                  n_estimators=200,
                                  verbose=2)
-'''
-
 clf_opt = GradientBoostingClassifier(random_state=SEED,
-                                     max_depth=4,
+                                     max_depth=7,
                                      min_samples_leaf=3,
                                      min_samples_split=5,
-                                     n_estimators=200,
+                                     subsample=0.5,
+                                     learning_rate=0.1,
+                                     n_estimators=100,
                                      verbose=2)
+'''
+
+
+
+clf_opt = XGBClassifier(random_state=SEED,
+                        max_depth=4,
+                        min_samples_leaf=3,
+                        min_samples_split=2,
+                        n_estimators=100,
+                        learning_rate=0.1,
+                        subsample=0.5,
+                        objective="binary:logistic",
+                        silent=False)
+
+print("Fitting model for variable importance... ")
+clf_opt.fit(X_train, y_train)
+
+f_i = get_important_features(clf=clf_opt, columns=X_train.columns)
+
+f_m_i = get_most_important_features(f_i)
+
+print("Model fitted. Predicting ...")
+X_test = X_test.loc[:, f_m_i]
+X_train = X_train.loc[:, f_m_i]
+
+
+clf_opt = XGBClassifier(random_state=SEED,
+                        max_depth=4,
+                        min_samples_leaf=3,
+                        min_samples_split=2,
+                        n_estimators=100,
+                        learning_rate=0.1,
+                        subsample=0.5,
+                        objective="binary:logistic",
+                        silent=False)
 
 print("Fitting model ... ")
 clf_opt.fit(X_train, y_train)
 
-
-get_most_important_features(clf=clf_opt, columns=X_train.columns)
 
 
 print("Model fitted. Predicting ...")
@@ -153,18 +191,20 @@ report_classification(y_test=y_test, predicted=clf_opt.predict(X_test))
 
 print("Prepare test data for prediction")
 
-df_app_test = preprocess_test_set(df_train=df_app_train, df_test=df_app_test)
-
-print("Predict on test data")
 
 # Get the ID column
 sk_id_curr = df_app_test[SK_ID_CURR]
+
+df_app_test = preprocess_test_set(df_train=X_train, df_test=df_app_test)
+
+print("Predict on test data")
+
 
 # Remove the unique ID(PK) from the test data
 df_app_test = df_app_test.loc[:, df_app_test.columns != SK_ID_CURR]
 
 # Predict
-y_pred_test = clf_opt.predict_proba(df_app_test)
+y_pred_test = clf_opt.predict_proba(df_app_test[f_m_i])
 
 # This line does this:  [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]
 y_pred_test_prob = list(map(lambda x: x[1], y_pred_test))
