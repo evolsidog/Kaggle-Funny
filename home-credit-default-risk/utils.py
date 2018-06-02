@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from sklearn.metrics import roc_curve, auc, classification_report
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin
@@ -15,13 +17,12 @@ def split_num_str_data(df):
     dataframe only contains string data.
     '''
 
-    df_num = df.select_dtypes(include=['int64', 'float64'])
+    df_num = df.select_dtypes(include=['int64', 'float64', 'uint8'])
     df_str = df.select_dtypes(include='object')
     return df_num, df_str
 
 
 def preprocess_test_set(df_test, df_train):
-
     '''
 
     This function prepares the test set for the prediction.
@@ -45,6 +46,7 @@ def preprocess_test_set(df_test, df_train):
     df_num = pd.concat([df_test_num, df_str], axis=1)
 
     return df_num
+
 
 def estimate_auc(y_test, y_pred, name=None):
     '''
@@ -70,6 +72,7 @@ def estimate_auc(y_test, y_pred, name=None):
     plt.xlabel('False Positive Rate')
     fig.savefig('roc_curve_' + name + '_.png')
 
+
 def get_important_features(clf, columns):
     '''
 
@@ -83,15 +86,14 @@ def get_important_features(clf, columns):
 
     return f_i
 
-def get_most_important_features(f_i):
 
+def get_most_important_features(f_i):
     r = []
     for item in f_i:
-        if item[0]>0.01:
-          r.append(item[1])
+        if item[0] > 0.01:
+            r.append(item[1])
 
     return r
-
 
 
 def report_classification(y_test, predicted):
@@ -122,21 +124,21 @@ def encode_categorical_variables(df):
     :return: The encoded Dataframe
     '''
 
-
     le = preprocessing.LabelEncoder()
     for col in df.columns:
         le.fit(df[col])
-        df[col] = le.transform(df[col])
-        df[col] = df[col] - df[col].median()
+        df.loc[:, col] = le.transform(df[col])
+        df.loc[:, col] = df[col] - df[col].median()
     return df
+
 
 def drop_nan_by_thresh(df, thresh, axis):
     shape = axis - 1 if axis == 1 else axis + 1
-    df = df.dropna(axis=axis, thresh=int(thresh*df.shape[shape]))
+    df = df.dropna(axis=axis, thresh=int(thresh * df.shape[shape]))
     return df
 
 
-def deal_with_nan(df, action=None):
+def deal_with_nan(df, users_default=None, action="drop_rows"):
     '''
 
     :param df: Dataframe we want to remove NaN from
@@ -144,6 +146,20 @@ def deal_with_nan(df, action=None):
     Choose "impute" if you want to impute the NaN values
     :return: The Dataframe without NaN's
     '''
+
+    # We want mantein maximum defaults users. We drop targets 0 and impute targets 1.
+    # users_pay_df = df[~df["SK_ID_CURR"].isin(users_default)]
+    # users_defaults_df = df[df["SK_ID_CURR"].isin(users_default)]
+    #
+    # print("rows which target are 0", users_pay_df.shape[0])
+    # users_pay_df = users_pay_df.dropna(axis=0, thresh=int(0.5 * users_pay_df.shape[1]))
+    # users_pay_df = DataFrameImputer(fill_type="mean_mode").fit_transform(X=users_pay_df)
+    # print("dropping row which contains nan's ", users_pay_df.shape[0])
+    #
+    # users_defaults_df = users_defaults_df.dropna(axis=0, thresh=int(0.5 * users_defaults_df.shape[1]))
+    # users_defaults_df = DataFrameImputer(fill_type="mean_mode").fit_transform(X=users_defaults_df)
+    # print("imputing with mode and mean rows which target are 1")
+
     if action == "drop_rows":
         df = df.dropna(axis=0)
         print("dropping row which contains nan's ", df.shape[0])
@@ -152,6 +168,7 @@ def deal_with_nan(df, action=None):
         df = DataFrameImputer(fill_type="mean_mode").fit_transform(X=df)
         print("imputing with mode and mean")
 
+    # return pd.concat([users_pay_df, users_defaults_df])
     return df
 
 def get_best_grid_cv_model(clf, param_grid, X_train, y_train):
@@ -186,12 +203,42 @@ def get_best_grid_cv_model(clf, param_grid, X_train, y_train):
     return clf
 
 
+def mini_profiling(df, name=None):
+    num_rows = 10
+    with pd.option_context('display.max_rows', num_rows, 'display.max_columns', len(df.columns)):
+        print("------------ Mini profiling " + name + " ---------------")
+        print(name + " shape: ", df.shape)
+        print(name + " data types: ", df.dtypes)
+        print(name + " describe: ", df.describe())
+        print(df.head(num_rows))
+
+
+def clean_df(df, thresh):
+    print("Columns before dropping column nan's", df.shape[1])
+    # Removes columns
+    df = drop_nan_by_thresh(df=df, thresh=thresh, axis=1)
+    print("Columns after dropping column nan's", df.shape[1])
+
+    print("Rows before dealing with nan ", df.shape[0])
+    # Remove rows
+    df = deal_with_nan(df=df, users_default=None)
+    print("Rows after dealing with nan ", df.shape[0])
+
+    # Split numeric and non numeric data
+    df_num, df_str = split_num_str_data(df)
+
+    print("Encoding categorical variables")
+    df_str = encode_categorical_variables(df_str)
+    df = pd.concat([df_num, df_str], axis=1)
+
+    return df
+
+
 # Categorical DataFrame imputer
 # https://stackoverflow.com/questions/25239958/impute-categorical-missing-values-in-scikit-learn?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 
 
 class DataFrameImputer(TransformerMixin):
-
     def __init__(self, fill_type="mean_mode"):
         '''
 
@@ -209,8 +256,8 @@ class DataFrameImputer(TransformerMixin):
 
         if self.fill_type == "mean_mode":
             self.fill = pd.Series([X[c].value_counts().index[0]
-                if X[c].dtype == np.dtype('O') else X[c].mean() for c in X],
-                index=X.columns)
+                                   if X[c].dtype == np.dtype('O') else X[c].mean() for c in X],
+                                  index=X.columns)
 
         elif self.fill_type == "const":
             self.fill = pd.Series(["-1" if X[c].dtype == np.dtype('O') else -1 for c in X],
