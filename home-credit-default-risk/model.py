@@ -107,7 +107,7 @@ print("Train size before resampling", X_train.shape[0])
 
 print("SMOTE Oversampling ..")  # 0.761
 # X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
-X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
+# X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
 # X_resampled, y_resampled = SMOTEENN(random_state=SEED).fit_sample(X_train, y_train)
 
 # Fit and transform x
@@ -119,11 +119,11 @@ pca = PCA(n_components=X_train.shape[1])
 X_resampled = pca.fit_transform(X_resampled)
 '''
 
-pos_weight_after = sum(y_resampled) / y_resampled.size * 100
+# pos_weight_after = sum(y_resampled) / y_resampled.size * 100
 
-print("Positive class samples percentage after resampling", pos_weight_after)
+# print("Positive class samples percentage after resampling", pos_weight_after)
 
-print("Train Size after resampling", X_resampled.shape[0])
+# print("Train Size after resampling", X_resampled.shape[0])
 
 '''
 clf_opt = RandomForestClassifier(n_jobs=NJOBS,
@@ -166,14 +166,46 @@ print("Model fitted. Predicting ...")
 X_test = X_test.loc[:, f_m_i]
 X_train = X_train.loc[:, f_m_i]
 '''
+'''
+# Try 1 --> learning_rate=0.1, max_delta_step=1, max_depth=4, min_child_weight=1, n_estimators=150, objective=binary:logistic, reg_alpha=1, scale_pos_weight=12, subsample=0.6
+param_grid = {
+    "max_depth": [4, 5],
+    "max_delta_step": [1, 2],
+    "n_estimators": [100, 150],
+    'learning_rate': [0.1, 0.2],
+    'subsample': [0.5, 0.6],
+    "reg_alpha": [0, 1],
+    "scale_pos_weight": [12, 13],
+    "min_child_weight": [1, 2],
+    "objective": ["binary:logistic"]
+}
+
+print("Starting grid search")
+xgb_model = XGBClassifier(random_state=SEED)
+clf_gs = GridSearchCV(xgb_model, param_grid, scoring='roc_auc', verbose=10)
+clf_gs.fit(X_train, y_train)
+print("Best hiperparameters after grid search: ", clf_gs.best_estimator_.get_params())
+
 
 clf_opt = XGBClassifier(random_state=SEED,
                         max_depth=4,
-                        min_samples_leaf=3,
-                        min_samples_split=2,
+                        max_delta_step=3,
                         n_estimators=100,
+                        learning_rate=0.2,
+                        subsample=0.6,
+                        reg_alpha=1,
+                        scale_pos_weight=12.85,
+                        objective="binary:logistic",
+                        silent=False)
+'''
+clf_opt = XGBClassifier(random_state=SEED,
+                        max_depth=4,
+                        max_delta_step=1,
+                        n_estimators=150,
                         learning_rate=0.1,
-                        subsample=0.5,
+                        subsample=0.6,
+                        reg_alpha=1,
+                        scale_pos_weight=12,
                         objective="binary:logistic",
                         silent=False)
 
