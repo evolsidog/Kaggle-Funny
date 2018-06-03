@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from sklearn.metrics import roc_curve, auc, classification_report
+from sklearn.metrics import roc_curve, auc, classification_report, precision_recall_curve
 from sklearn import preprocessing
 from sklearn.base import TransformerMixin
 from sklearn.model_selection import GridSearchCV
@@ -47,6 +47,14 @@ def preprocess_test_set(df_test, df_train):
 
     return df_num
 
+def pr_auc_score(y_true, y_score):
+    """
+    Generates the Area Under the Curve for precision and recall.
+    """
+    precision, recall, thresholds = \
+        precision_recall_curve(y_true, y_score[:, 1])
+
+    return auc(recall, precision, reorder=True)
 
 def estimate_auc(y_test, y_pred, name=None):
     '''
@@ -71,6 +79,24 @@ def estimate_auc(y_test, y_pred, name=None):
     plt.ylabel('True Positive Rate')
     plt.xlabel('False Positive Rate')
     fig.savefig('roc_curve_' + name + '_.png')
+
+
+def plot_grid_search(clf_grid, n_estimators, max_depths):
+    print(clf_grid.best_params_)
+
+    fig = plt.figure()
+    plt.title('Grid Search')
+
+    scores = [x[1] for x in clf_grid.grid_scores_]
+    scores = np.array(scores).reshape(len(n_estimators), len(max_depths))
+
+    for ind, i in enumerate(n_estimators):
+        plt.plot(max_depths, scores[ind], label='C: ' + str(i))
+    plt.legend()
+    plt.xlabel('Max Depth')
+    plt.ylabel('Number estimators')
+    plt.show()
+    fig.savefig('GridResults.png')
 
 
 def get_important_features(clf, columns):

@@ -2,15 +2,21 @@
 
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification, preprocess_test_set, \
-    deal_with_nan, encode_categorical_variables, get_most_important_features, get_important_features
+    deal_with_nan, encode_categorical_variables, get_most_important_features, get_important_features, plot_grid_search, \
+    pr_auc_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.combine import SMOTEENN
 from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 from xgboost import XGBClassifier
+from sklearn.metrics import fbeta_score, make_scorer
+from sklearn.metrics import make_scorer
+from lightgbm import LGBMClassifier
 import pandas as pd
 import random
+import numpy as np
 import os
 import time
 
@@ -34,7 +40,7 @@ ini_time = time.time()
 
 SEED = 1234
 TEST_SIZE = 0.20
-THRESH = 0.80
+THRESH = 0.75
 NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
@@ -106,9 +112,12 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
 print("Train size before resampling", X_train.shape[0])
 
 print("SMOTE Oversampling ..")  # 0.761
-X_resampled, y_resampled = SMOTE(random_state=SEED, kind='borderline1', ratio='minority').fit_sample(X_train, y_train)
+X_resampled, y_resampled = SMOTE(random_state=SEED, ratio='minority').fit_sample(X_train, y_train)
 #X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
 # X_resampled, y_resampled = SMOTEENN(random_state=SEED).fit_sample(X_train, y_train)
+
+
+X_resampled = pd.DataFrame(X_resampled, columns=X_train.columns)
 
 # Fit and transform x
 '''
@@ -122,40 +131,48 @@ X_resampled = pca.fit_transform(X_resampled)
 pos_weight_after = sum(y_resampled) / y_resampled.size * 100
 
 print("Positive class samples percentage after resampling", pos_weight_after)
-
 print("Train Size after resampling", X_resampled.shape[0])
 
+
+'''
 clf_opt = XGBClassifier(random_state=SEED,
-                        max_depth=2,
+                        max_depth=3,
                         min_samples_leaf=2,
-                        min_samples_split=1,
-                        n_estimators=2000,
-                        learning_rate=0.1,
-                        subsample=0.5,
+                        n_estimators=1000,
                         silent=False,
                         n_gpus=-1,
-                        colsample_bylevel=0.1,
-                        gamma= 0.01,
-                        colsample_bytree=0.1,
                         updater='grow_gpu',
                         three_method='gpu_hist',
                         predictor='gpu_predictor')
-
-
-
 '''
-clf_grid = GridSearchCV(cv=3, param_grid=param_grid, estimator=clf_opt, verbose=3)
+
+
+
+n_estimators = [1000, 1500, 2000]
+max_depths = [2, 3, 4]
+
+param_grid = {'n_estimators': n_estimators,
+              'max_depth': max_depths}
+
+
+clf_opt = LGBMClassifier(max_depth=3, n_estimators=1500, n_jobs=-1, silent=False)
+
+
+
+clf_grid = GridSearchCV(cv=3, param_grid=param_grid, estimator=clf_opt, verbose=3, scoring=pr_auc_score)
 clf_grid.fit(X_train, y_train)
-print(clf_grid.best_params_)
-'''
+
+plot_grid_search(clf_grid=clf_grid, n_estimators=n_estimators, max_depths=max_depths)
+
+
 
 
 print("Fitting model ... ")
-clf_opt.fit(X_train, y_train)
+clf_opt.fit(X, y)
 
 print("Model fitted. Predicting ...")
-y_pred_test = clf_opt.predict_proba(X_test)
-y_pred_train = clf_opt.predict_proba(X_train)
+y_pred_test = clf_opt.predict_proba(X_test[X.columns])
+y_pred_train = clf_opt.predict_proba(X_train[X.columns])
 
 # Get the second element of each list. The second element is the probability of label 1.
 y_pred_test = list(map(lambda x: x[1], y_pred_test))  # [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]

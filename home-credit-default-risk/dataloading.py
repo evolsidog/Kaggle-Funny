@@ -22,7 +22,7 @@ gc.enable()
 
 base_path = "/home/" + USER + "/.kaggle/competitions/home-credit-default-risk"
 print("--------- Starting data loading -------------")
-
+'''
 print("Reading train.csv")
 df_app_train = pd.read_csv(os.path.join(base_path, "application_train.csv"))
 users_default = df_app_train[df_app_train[TARGET] == 1][SK_ID_CURR]
@@ -98,11 +98,107 @@ print("Columns train after merging", df_app_test_merge.shape[1])
 del df_app_train, df_app_test
 gc.collect()
 
-print("------- Generating new train and test files ---------")
+print("------- Generating new train and test files for Bureau Data ---------")
 df_app_train_merge.to_csv("merge_application_train.csv")
 df_app_test_merge.to_csv("merge_application_test.csv")
 
 del df_app_train_merge, df_app_test_merge
 gc.collect()
 
+
+
+
+print("------ Reading credit_card_balance.csv ------")
+
+
+df_credit = pd.read_csv(os.path.join(base_path, "credit_card_balance.csv"))
+mini_profiling(df_credit, "credit_card_balance")
+
+print("------ Reading installments_payments.csv ------")
+
+df_installments_payments = pd.read_csv(os.path.join(base_path, "installments_payments.csv"))
+
+print("------------------------Group both by SK_ID_CURR ----------------------")
+
+df_installments_payments_grouped = df_installments_payments.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+df_credit_grouped = df_credit.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+
+print("------------------------ Merge credit_card_balance and installments_payments ----------------------")
+
+df_merge = df_installments_payments_grouped.merge(df_credit_grouped, how="left", on='SK_ID_CURR').reset_index()
+
+print("------------------------ Reade merge_application_train.csv ----------------------")
+
+df_app_train = pd.read_csv("merge_application_train.csv")
+
+print("------------------------ Reade merge_application_test.csv ----------------------")
+
+df_app_test = pd.read_csv("merge_application_test.csv")
+
+print("Test size before merge", df_app_train.shape)
+print("Train size before merge", df_app_test.shape)
+
+df_app_train_merge = df_merge.merge(df_app_train, how="right", on='SK_ID_CURR').reset_index()
+df_app_test_merge = df_merge.merge(df_app_test, how="right", on='SK_ID_CURR').reset_index()
+
+print("Test size after merge", df_app_test_merge.shape)
+print("Train size after merge", df_app_train_merge.shape)
+
+df_app_train_merge.to_csv("merge_application_train.csv")
+df_app_test_merge.to_csv("merge_application_test.csv")
+
+del df_app_train, df_app_test, df_app_test_merge, df_app_train_merge
+del df_credit_grouped, df_credit, df_installments_payments, df_installments_payments_grouped
+gc.collect()
+
+print(df_merge.head(10))
+
+'''
+print("------ Reading POS_CASH_balance.csv ------")
+
+
+posh_cash_balance = pd.read_csv(os.path.join(base_path, "POS_CASH_balance.csv"))
+
+print("------ Reading previous_application.csv ------")
+
+df_previous_application = pd.read_csv(os.path.join(base_path, "previous_application.csv"))
+
+
+posh_cash_balance_grouped = posh_cash_balance.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+df_credit_grouped = df_previous_application.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+
+
+del posh_cash_balance, df_previous_application
+gc.collect()
+
+
+
+df_merge = df_credit_grouped.merge(posh_cash_balance_grouped, how="left", on='SK_ID_CURR').reset_index()
+
+
+print("------------------------ Reade merge_application_train.csv ----------------------")
+
+df_app_train = pd.read_csv("merge_application_train.csv")
+
+print("------------------------ Reade merge_application_test.csv ----------------------")
+
+df_app_test = pd.read_csv("merge_application_test.csv")
+
+print("Test size before merge", df_app_train.shape)
+print("Train size before merge", df_app_test.shape)
+
+df_app_train_merge = df_merge.merge(df_app_train, how="right", on='SK_ID_CURR').reset_index()
+df_app_test_merge = df_merge.merge(df_app_test, how="right", on='SK_ID_CURR').reset_index()
+
+
+print("Test size after merge", df_app_test_merge.shape)
+print("Train size after merge", df_app_train_merge.shape)
+
+df_app_train_merge.to_csv("merge_application_train.csv")
+df_app_test_merge.to_csv("merge_application_test.csv")
+
 print("Total seconds = ", time.time() - ini_time)
+
+
+
+
