@@ -11,7 +11,7 @@ ini_time = time.time()
 
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
-USER = "vic"
+USER = "ncarvalho"
 THRESH = 0.8
 desired_width = 250
 pd.set_option('display.width', desired_width)
@@ -76,7 +76,7 @@ print(df_bureau_merge.head(10))
 
 # Now group by sk_id_curr to prepare merge with train and test files
 df_bureau_merge = df_bureau_merge.drop('SK_ID_BUREAU', axis=1)
-df_bureau_merge = df_bureau_merge.groupby(['SK_ID_CURR']).sum().reset_index()
+df_bureau_merge = df_bureau_merge.groupby(['SK_ID_CURR']).agg(['sum', 'mean', 'std']).reset_index()
 
 
 del df_bureau_bal, df_bureau

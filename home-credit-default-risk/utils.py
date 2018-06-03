@@ -213,7 +213,7 @@ def mini_profiling(df, name=None):
         print(df.head(num_rows))
 
 
-def clean_df(df, thresh):
+def clean_df(df, thresh, action='drop_rows'):
     print("Columns before dropping column nan's", df.shape[1])
     # Removes columns
     df = drop_nan_by_thresh(df=df, thresh=thresh, axis=1)
@@ -221,7 +221,7 @@ def clean_df(df, thresh):
 
     print("Rows before dealing with nan ", df.shape[0])
     # Remove rows
-    df = deal_with_nan(df=df, users_default=None)
+    df = deal_with_nan(df=df, users_default=None, action=action)
     print("Rows after dealing with nan ", df.shape[0])
 
     # Split numeric and non numeric data

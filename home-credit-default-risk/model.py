@@ -33,8 +33,8 @@ import time
 ini_time = time.time()
 
 SEED = 1234
-TEST_SIZE = 0.2
-THRESH = 0.8
+TEST_SIZE = 0.20
+THRESH = 0.80
 NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
@@ -106,8 +106,8 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE,
 print("Train size before resampling", X_train.shape[0])
 
 print("SMOTE Oversampling ..")  # 0.761
-# X_resampled, y_resampled = SMOTE(random_state=SEED, kind='regular').fit_sample(X_train, y_train)
-X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
+X_resampled, y_resampled = SMOTE(random_state=SEED, kind='borderline1', ratio='minority').fit_sample(X_train, y_train)
+#X_resampled, y_resampled = ADASYN(random_state=SEED).fit_sample(X_train, y_train)
 # X_resampled, y_resampled = SMOTEENN(random_state=SEED).fit_sample(X_train, y_train)
 
 # Fit and transform x
@@ -125,57 +125,30 @@ print("Positive class samples percentage after resampling", pos_weight_after)
 
 print("Train Size after resampling", X_resampled.shape[0])
 
-'''
-clf_opt = RandomForestClassifier(n_jobs=NJOBS,
-                                 random_state=SEED,
-                                 bootstrap=False,
-                                 max_depth=6,
-                                 min_samples_leaf=3,
-                                 min_samples_split=5,
-                                 n_estimators=200,
-                                 verbose=2)
-clf_opt = GradientBoostingClassifier(random_state=SEED,
-                                     max_depth=7,
-                                     min_samples_leaf=3,
-                                     min_samples_split=5,
-                                     subsample=0.5,
-                                     learning_rate=0.1,
-                                     n_estimators=100,
-                                     verbose=2)
-'''
-
-'''
 clf_opt = XGBClassifier(random_state=SEED,
-                        max_depth=4,
-                        min_samples_leaf=3,
-                        min_samples_split=2,
-                        n_estimators=100,
+                        max_depth=2,
+                        min_samples_leaf=2,
+                        min_samples_split=1,
+                        n_estimators=2000,
                         learning_rate=0.1,
                         subsample=0.5,
-                        objective="binary:logistic",
-                        silent=False)
+                        silent=False,
+                        n_gpus=-1,
+                        colsample_bylevel=0.1,
+                        gamma= 0.01,
+                        colsample_bytree=0.1,
+                        updater='grow_gpu',
+                        three_method='gpu_hist',
+                        predictor='gpu_predictor')
 
-print("Fitting model for variable importance... ")
-clf_opt.fit(X_train, y_train)
 
-f_i = get_important_features(clf=clf_opt, columns=X_train.columns)
 
-f_m_i = get_most_important_features(f_i)
-
-print("Model fitted. Predicting ...")
-X_test = X_test.loc[:, f_m_i]
-X_train = X_train.loc[:, f_m_i]
+'''
+clf_grid = GridSearchCV(cv=3, param_grid=param_grid, estimator=clf_opt, verbose=3)
+clf_grid.fit(X_train, y_train)
+print(clf_grid.best_params_)
 '''
 
-clf_opt = XGBClassifier(random_state=SEED,
-                        max_depth=4,
-                        min_samples_leaf=3,
-                        min_samples_split=2,
-                        n_estimators=100,
-                        learning_rate=0.1,
-                        subsample=0.5,
-                        objective="binary:logistic",
-                        silent=False)
 
 print("Fitting model ... ")
 clf_opt.fit(X_train, y_train)
