@@ -3,7 +3,7 @@
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification, preprocess_test_set, \
     deal_with_nan, encode_categorical_variables, get_most_important_features, get_important_features, plot_grid_search, \
-    pr_auc_score
+    pr_auc_score, DataFrameImputer
 from sklearn.model_selection import train_test_split, GridSearchCV
 from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
@@ -40,7 +40,7 @@ ini_time = time.time()
 
 SEED = 1234
 TEST_SIZE = 0.20
-THRESH = 0.75
+THRESH = 0.8
 NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
@@ -148,31 +148,43 @@ clf_opt = XGBClassifier(random_state=SEED,
 
 
 
-n_estimators = [1000, 1500, 2000]
-max_depths = [2, 3, 4]
 
-param_grid = {'n_estimators': n_estimators,
-              'max_depth': max_depths}
+feature_fraction = [0.1, 0.3 , 0.5, 0.7]
+min_data_in_leaf = [4, 8, 16, 32]
 
+param_grid = {'feature_fraction': feature_fraction,
+              'min_data_in_leaf': min_data_in_leaf}
 
-clf_opt = LGBMClassifier(max_depth=3, n_estimators=1500, n_jobs=-1, silent=False)
-
-
-
-clf_grid = GridSearchCV(cv=3, param_grid=param_grid, estimator=clf_opt, verbose=3, scoring=pr_auc_score)
-clf_grid.fit(X_train, y_train)
-
-plot_grid_search(clf_grid=clf_grid, n_estimators=n_estimators, max_depths=max_depths)
+# Best for this{'feature_fraction': 0.7, 'min_data_in_leaf': 4}
 
 
+clf_opt = LGBMClassifier(max_depth=3,
+                         n_estimators=3000,
+                         n_jobs=-1,
+                         num_leaves=2,
+                         min_split_gain=0.01,
+                         silent=False)
+
+
+'''
+clf_grid = GridSearchCV(cv=3, param_grid=param_grid, estimator=clf_opt, verbose=3, scoring='roc_auc')
+clf_grid.fit(X, y)
+plot_grid_search(clf_grid=clf_grid, n_estimators=min_data_in_leaf, max_depths=feature_fraction)
+
+'''
+
+'''
+pca = PCA(n_components=10)
+X_train = pca.fit_transform(X_train)
+'''
 
 
 print("Fitting model ... ")
-clf_opt.fit(X, y)
+clf_opt.fit(X_train, y_train)
 
 print("Model fitted. Predicting ...")
-y_pred_test = clf_opt.predict_proba(X_test[X.columns])
-y_pred_train = clf_opt.predict_proba(X_train[X.columns])
+y_pred_test = clf_opt.predict_proba(X_test[X_train.columns])
+y_pred_train = clf_opt.predict_proba(X_train[X_train.columns])
 
 # Get the second element of each list. The second element is the probability of label 1.
 y_pred_test = list(map(lambda x: x[1], y_pred_test))  # [[0.14, 0.86],[0.23, 0.77],[0.35, 0.65]] -> [0.86, 0.77, 0.65]

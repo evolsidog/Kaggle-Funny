@@ -194,6 +194,19 @@ def deal_with_nan(df, users_default=None, action="drop_rows"):
         df = DataFrameImputer(fill_type="mean_mode").fit_transform(X=df)
         print("imputing with mode and mean")
 
+    elif action == "impute_knn":
+
+        # Split numeric and non numeric data
+        df_app_train_num, df_app_train_str = split_num_str_data(df)
+
+        df_app_train_str = DataFrameImputer(fill_type="mean_mode").fit_transform(X=df_app_train_str)
+
+
+        print("Encoding categorical variables")
+        df_app_train_str = encode_categorical_variables(df_app_train_str)
+        df_app_train = pd.concat([df_app_train_num, df_app_train_str], axis=1)
+        df = KNN(k=2).complete(df_app_train)
+
     # return pd.concat([users_pay_df, users_defaults_df])
     return df
 

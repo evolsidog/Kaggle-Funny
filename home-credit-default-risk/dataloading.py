@@ -12,7 +12,7 @@ ini_time = time.time()
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
 USER = "ncarvalho"
-THRESH = 0.8
+THRESH = 0.75
 desired_width = 250
 pd.set_option('display.width', desired_width)
 gc.enable()
@@ -22,7 +22,7 @@ gc.enable()
 
 base_path = "/home/" + USER + "/.kaggle/competitions/home-credit-default-risk"
 print("--------- Starting data loading -------------")
-'''
+
 print("Reading train.csv")
 df_app_train = pd.read_csv(os.path.join(base_path, "application_train.csv"))
 users_default = df_app_train[df_app_train[TARGET] == 1][SK_ID_CURR]
@@ -47,7 +47,7 @@ print(df_bureau_bal.head(10))
 
 print("Processing bureau balance")
 df_bureau_bal = df_bureau_bal.drop(columns=['MONTHS_BALANCE'])
-df_bureau_bal = df_bureau_bal.groupby('SK_ID_BUREAU').sum().reset_index('SK_ID_BUREAU')
+df_bureau_bal = df_bureau_bal.groupby('SK_ID_BUREAU').agg(['sum', 'mean', 'std', 'min']).reset_index('SK_ID_BUREAU')
 print(df_bureau_bal.head(10))
 
 print("------ Reading bureau.csv ------")
@@ -67,7 +67,7 @@ df_bureau = clean_df(df_bureau, THRESH)
 print(df_bureau.head(10))
 
 print("Processing bureau")
-df_bureau = df_bureau.groupby(['SK_ID_CURR', 'SK_ID_BUREAU']).sum().reset_index()
+df_bureau = df_bureau.groupby(['SK_ID_CURR', 'SK_ID_BUREAU']).agg(['sum', 'mean', 'std']).reset_index()
 
 print("Merge bureau and bureau balance")
 # TODO After merge, int columns convert to float columns. Bug in pandas
@@ -76,7 +76,7 @@ print(df_bureau_merge.head(10))
 
 # Now group by sk_id_curr to prepare merge with train and test files
 df_bureau_merge = df_bureau_merge.drop('SK_ID_BUREAU', axis=1)
-df_bureau_merge = df_bureau_merge.groupby(['SK_ID_CURR']).agg(['sum', 'mean', 'std']).reset_index()
+df_bureau_merge = df_bureau_merge.groupby(['SK_ID_CURR']).agg(['sum', 'mean', 'std', 'min']).reset_index()
 
 
 del df_bureau_bal, df_bureau
@@ -120,8 +120,8 @@ df_installments_payments = pd.read_csv(os.path.join(base_path, "installments_pay
 
 print("------------------------Group both by SK_ID_CURR ----------------------")
 
-df_installments_payments_grouped = df_installments_payments.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
-df_credit_grouped = df_credit.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+df_installments_payments_grouped = df_installments_payments.groupby([SK_ID_CURR]).agg(['mean', 'sum', 'std']).reset_index()
+df_credit_grouped = df_credit.groupby([SK_ID_CURR]).agg(['mean', 'sum', 'std', 'min']).reset_index()
 
 print("------------------------ Merge credit_card_balance and installments_payments ----------------------")
 
@@ -153,7 +153,7 @@ gc.collect()
 
 print(df_merge.head(10))
 
-'''
+
 print("------ Reading POS_CASH_balance.csv ------")
 
 
@@ -164,8 +164,8 @@ print("------ Reading previous_application.csv ------")
 df_previous_application = pd.read_csv(os.path.join(base_path, "previous_application.csv"))
 
 
-posh_cash_balance_grouped = posh_cash_balance.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
-df_credit_grouped = df_previous_application.groupby([SK_ID_CURR]).agg(['mean']).reset_index()
+posh_cash_balance_grouped = posh_cash_balance.groupby([SK_ID_CURR]).agg(['mean', 'sum', 'std', 'min']).reset_index()
+df_credit_grouped = df_previous_application.groupby([SK_ID_CURR]).agg(['mean', 'sum', 'std', 'min']).reset_index()
 
 
 del posh_cash_balance, df_previous_application
