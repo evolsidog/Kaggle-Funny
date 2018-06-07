@@ -1,6 +1,6 @@
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from utils import split_num_str_data, drop_nan_by_thresh, estimate_auc, report_classification, preprocess_test_set,\
-    deal_with_nan, encode_categorical_variables, get_most_important_features
+    deal_with_nan, encode_categorical_variables, get_most_important_features, get_important_features
 from sklearn.model_selection import train_test_split, GridSearchCV
 from imblearn.over_sampling import SMOTE, ADASYN
 from xgboost import XGBClassifier
@@ -33,7 +33,7 @@ THRESH = 0.8
 NJOBS = -1
 TARGET = "TARGET"
 SK_ID_CURR = "SK_ID_CURR"
-USER = "ncarvalho"
+USER = "crosado"
 
 random.seed(SEED)
 
@@ -132,10 +132,13 @@ print("Fitting model ... ")
 clf_opt.fit(X_train, y_train)
 
 
-get_most_important_features(clf=clf_opt, columns=X_train.columns)
+f_i = get_important_features(clf=clf_opt, columns=X_train.columns)
 
+f_m_i = get_most_important_features(f_i)
 
 print("Model fitted. Predicting ...")
+X_test = X_test.loc[:, f_m_i]
+X_train = X_train.loc[:, f_m_i]
 y_pred_test = clf_opt.predict_proba(X_test)
 y_pred_train = clf_opt.predict_proba(X_train)
 

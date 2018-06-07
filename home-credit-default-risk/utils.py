@@ -70,7 +70,7 @@ def estimate_auc(y_test, y_pred, name=None):
     plt.xlabel('False Positive Rate')
     fig.savefig('roc_curve_' + name + '_.png')
 
-def get_most_important_features(clf, columns):
+def get_important_features(clf, columns):
     '''
 
     :param clf: Sklearn Classifier optimized with GridSearch
@@ -78,10 +78,19 @@ def get_most_important_features(clf, columns):
     :return:
     '''
     feature_importances = clf.feature_importances_
-    print("Most important features are: ",
-          sorted(zip(map(lambda x: round(x, 4), feature_importances), columns), reverse=True))
+    f_i = sorted(zip(map(lambda x: round(x, 4), feature_importances), columns), reverse=True)
+    print("Most important features are: ", f_i)
 
+    return f_i
 
+def get_most_important_features(f_i):
+
+    r = []
+    for item in f_i:
+        if item[0]>0.0001:
+          r.append(item[1])
+
+    return r
 
 
 def report_classification(y_test, predicted):
