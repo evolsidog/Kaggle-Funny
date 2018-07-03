@@ -4,7 +4,10 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
+USER = "vic"
+BASE_PATH = "/home/" + USER + "/.kaggle/competitions/santander-value-prediction"
 desired_columns = 50
 desired_width = 280
 pd.set_option('display.max_columns', desired_columns)
@@ -60,8 +63,8 @@ def plot_scatter(x, serie, name=None):
 
 ini_time = time.time()
 
-train_path = 'train.csv'
-test_path = 'test.csv'
+train_path = os.path.join(BASE_PATH,'train.csv')
+test_path = os.path.join(BASE_PATH,'test.csv')
 
 print("----------- Loading train and test sets -----------")
 train_df = pd.read_csv(train_path)
@@ -96,6 +99,18 @@ print(missing_values_df.head(5))
 
 # There aren't null values
 
+print("--------- Get columns without variance --------")
+unique_df = train_df.nunique().reset_index()
+unique_df.columns = ['col_name', 'unique_count']
+constant_df = unique_df[unique_df['unique_count'] == 1]
+print("Number or constants columns: ", constant_df.shape[0])
+print("Remove this columns from train and test")
+
+train_df = train_df.drop(constant_df.col_name.tolist(), axis=1)
+test_df = test_df.drop(constant_df.col_name.tolist(), axis=1)
+print("Train shape now: ", train_df.shape[0])
+
+print("----------- Correlation features with target -----------")
 print("Time: ", time.time() - ini_time)
 
 
